@@ -1,1 +1,26 @@
 Computer E.
+
+@1
+How to start a computer?
+answers:
+press POWER key
+Ctrl+T
+best answer:
+1
+____________________________
+@1
+What is best Brand for labtab?
+answers:
+LG
+Asus
+best answer:
+1
+____________________________
+@1
+How to write a program to add two numbers?
+answers:
+function(n1,n2) return n1+n2
+int answer = num1 + num2
+best answer:
+1
+____________________________

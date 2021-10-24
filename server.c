@@ -25,12 +25,12 @@ int setupServer(int port)
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
-        printf("Error in binding\n");
+        printf("Error in bind()\n");
         return -1;
     }
     if (listen(server_fd, 4) < 0)
     {
-        printf("Error in listening\n");
+        printf("Error in listen()\n");
         return -1;
     }
 
@@ -43,27 +43,28 @@ int acceptClient(int server_fd)
     struct sockaddr_in client_address;
     int address_len = sizeof(client_address);
     client_fd = accept(server_fd, (struct sockaddr *)&client_address, (socklen_t *)&address_len);
-
     return client_fd;
 }
 
 int saveQuestion(char buffer[], int major)
 {
     int file_fd;
+    char name[30];
     if (major == 1)
     {
-        file_fd = open("CE.txt", O_APPEND | O_RDWR);
+        strcpy(name, "CE.txt");
     }
     else if (major == 2)
     {
-        file_fd = open("EE.txt", O_APPEND | O_RDWR);
+        strcpy(name, "EE.txt");
     }
     else if (major == 3)
     {
-        file_fd = open("CiE.txt", O_APPEND | O_RDWR);
+        strcpy(name, "CiE.txt");
     }
     else
-        file_fd = open("ME.txt", O_APPEND | O_RDWR);
+        strcpy(name, "ME.txt");
+    file_fd = open(name, O_APPEND | O_RDWR);
     write(file_fd, buffer, strlen(buffer));
     close(file_fd);
 }
@@ -76,12 +77,12 @@ int checkClients(char buffer[], int clientFD, int major)
 {
     if (major > 0 && major < 5)
     {
-        printf("client %d major is %d \n", clientFD, major);
+        printf("client %d major: %d \n", clientFD, major);
         numClient[major - 1][numOnline[major - 1]] = clientFD;
         numOnline[major - 1] += 1;
         if (numOnline[major - 1] == 3)
         {
-            printf("!!!Clients %d %d %d have same major!New port generated\n", numClient[major - 1][0], numClient[major - 1][1], numClient[major - 1][2]);
+            printf("***  %d %d %d have same major! New room generated\n", numClient[major - 1][0], numClient[major - 1][1], numClient[major - 1][2]);
             numOnline[major - 1] = 0;
             sprintf(buffer, "%d %d %d %d", availablePort, numClient[major - 1][0], numClient[major - 1][1], numClient[major - 1][2]);
             availablePort += 1;
@@ -90,7 +91,7 @@ int checkClients(char buffer[], int clientFD, int major)
     }
     else
     {
-        sprintf(buffer, "You send wrong major id \n");
+        sprintf(buffer, "Major id not exits \n");
         send(clientFD, buffer, strlen(buffer), 0);
     }
     return 0;
@@ -105,7 +106,7 @@ int main(int argc, char const *argv[])
     if (argv[1] > 0)
     {
         server_fd = setupServer(atoi(argv[1]));
-        printf("Port = %s\n ", argv[1]);
+        printf("Server Port = %s\n ", argv[1]);
     }
     else
         server_fd = setupServer(LocalPort);
@@ -117,7 +118,7 @@ int main(int argc, char const *argv[])
     max_sd = server_fd;
     FD_SET(server_fd, &master_set);
 
-    write(1, "Staring... \n\n\n", 20);
+    write(1, "Staring... \n\n\n", 15);
 
     int basePort = LocalPort + 1;
 
@@ -130,24 +131,24 @@ int main(int argc, char const *argv[])
             if (FD_ISSET(i, &working_set))
             {
                 if (i == server_fd)
-                { // new clinet
+                {
                     new_socket = acceptClient(server_fd);
                     FD_SET(new_socket, &master_set);
                     if (new_socket > max_sd)
                         max_sd = new_socket;
-                    printf("New client connected. id = %d\n", new_socket);
+                    printf("New client %d\n", new_socket);
                     sprintf(buffer, "%d \n choose: 1-Computer E. 2-Electrical E. 3-Civil E. 4-Mechanical E. \n", new_socket);
                     send(new_socket, buffer, strlen(buffer), 0);
                     memset(buffer, 0, 1024);
                 }
                 else
-                { // client sending msg
+                {
                     int bytes_received;
                     bytes_received = recv(i, buffer, 1024, 0);
 
                     if (bytes_received == 0)
-                    { // EOF
-                        printf("client fd = %d closed\n", i);
+                    {
+                        printf("client %d left the room\n", i);
                         close(i);
                         FD_CLR(i, &master_set);
                         continue;
@@ -156,7 +157,7 @@ int main(int argc, char const *argv[])
                     if (buffer[0] == '@')
                     {
                         int id = atoi(&buffer[1]);
-                        printf("client %d: %s\n", i, buffer);
+                        printf("client %d sent answers! \n", i);
                         saveQuestion(buffer, id);
                         sprintf(buffer, "Your answer submited!\n");
                         send(i, buffer, strlen(buffer), 0);
@@ -169,7 +170,7 @@ int main(int argc, char const *argv[])
                             {
                                 send(numClient[major - 1][j], buffer, strlen(buffer), 0);
                             }
-                            printf("Success!\n");
+                            printf("Clients added to a room successfully!\n");
                         }
                     }
                     memset(buffer, 0, 1024);
@@ -177,9 +178,6 @@ int main(int argc, char const *argv[])
             }
         }
     }
-    printf("END");
+    printf("...Shut down...");
     return 0;
 }
-
-//sprintf(buff,"%d",port)
-//send(socket,strlen(msg))
