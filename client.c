@@ -7,13 +7,10 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <signal.h>
 
 #define LocalPort 8082
 int roomPort = 0;
-int turns[3][3] = {
-    {1, 0, 0},
-    {0, 1, 0},
-    {0, 0, 1}};
 
 int connectServer(int port)
 {
@@ -35,7 +32,28 @@ int connectServer(int port)
     return fd;
 }
 
-void QRoom(int t1, int t2, int t3)
+struct Questions
+{
+    char ask[300];
+    char answer[2][300];
+    char bestAnswer[1];
+} QT;
+
+void alarm_handler(int sig)
+{
+    printf("Times out!\n");
+}
+
+int ifPassed(char buffer[])
+{
+    if (buffer[0] == 'p' && buffer[1] == 'a' && buffer[2] == 's' && buffer[3] == 's' && buffer[4] == '\n')
+    {
+        return 1;
+    }
+    return 0;
+}
+
+void QRoom(int t1, int t2, int t3, int id)
 {
     int sock, broadcast = 1, opt = 1;
     char buffer[1024] = {0};
@@ -50,31 +68,80 @@ void QRoom(int t1, int t2, int t3)
     bc_address.sin_addr.s_addr = inet_addr("192.168.1.255");
 
     bind(sock, (struct sockaddr *)&bc_address, sizeof(bc_address));
-
-    while (1)
+    int turns[9][3] = {
+        {t1, t2, t3},
+        {t3, t1, t2},
+        {t2, t3, t1},
+        {t2, t3, t1},
+        {t3, t1, t2},
+        {t1, t2, t3},
+        {t3, t1, t2},
+        {t1, t2, t3},
+        {t2, t3, t1}};
+    signal(SIGALRM, alarm_handler);
+    siginterrupt(SIGALRM, 1);
+    int indexAnswer = 0;
+    for (int j = 0; j < 9; j++)
     {
-        memset(buffer, 0, 1024);
-        for (int i = 0; i < 3; i++)
-        { //for first q
-            for (int j = 0; j < 3; j++)
-            { // ask
-                for (int z = 0; z < 3; z++)
-                { //answer
-                    if (turns[j][z] == 1)
-                    {
-                        printf("turn for %d of list:\n", z + 1);
-                        read(0, buffer, 1024);
-                        int a = sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr *)&bc_address, sizeof(bc_address));
-                    }
-                    if (turns[j][z] == 0)
-                    {
-                        recv(sock, buffer, 1024, 0);
-                        printf("%s\n", buffer);
-                    }
-                }
+        if (turns[j][0] == id)
+        {
+            memset(buffer, 0, 1024);
+            printf("Your Turn\n");
+            int read_ret = 0;
+            if (j % 3 == 0)
+            {
+                printf("Ask:\n");
+                indexAnswer = 1;
+                read_ret = read(0, buffer, 1024);
+                strcpy(QT.ask, buffer);
+                printf("\n");
             }
+            else
+            {
+                printf("You have 60 seconds to answer the question:\n");
+                alarm(60);
+                read_ret = read(0, buffer, 1024);
+                alarm(0);
+                printf("\n");
+            }
+            if (read_ret < 0)
+            {
+                sprintf(buffer, "Time is over for %d\n", id);
+            }
+            sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr *)&bc_address, sizeof(bc_address));
+            recv(sock, buffer, 1024, 0);
+        }
+        else
+        {
+            memset(buffer, 0, 1024);
+            printf("Turn for others!\nWait...\n\n");
+            recv(sock, buffer, 1024, 0);
+            if (indexAnswer > 0 && indexAnswer < 3)
+            {
+                if (ifPassed(buffer) == 1)
+                {
+                    strcpy(QT.answer[indexAnswer - 1], "-\n");
+                }
+                else
+                {
+                    strcpy(QT.answer[indexAnswer - 1], buffer);
+                }
+                indexAnswer += 1;
+            }
+            printf("%s\n", buffer);
         }
     }
+    if (QT.answer[0] == "=\n")
+        QT.bestAnswer[0] = '2';
+    else if (QT.answer[1] == "=\n")
+        QT.bestAnswer[0] = '1';
+    else
+        QT.bestAnswer[0] = id % 2 ? '1' : '2';
+    strcat(QT.ask, "answers:\n");
+    strcat(QT.ask, QT.answer[0]);
+    strcat(QT.ask, QT.answer[1]);
+    strcat(QT.ask, "best answer:\n");
+    strcat(QT.ask, QT.bestAnswer);
 }
 
 int main(int argc, char const *argv[])
@@ -94,12 +161,15 @@ int main(int argc, char const *argv[])
         return 0;
 
     recv(fd, buff, 1024, 0);
-    printf("Server said: %s\n", buff);
+    int id = atoi(&buff[0]);
+    printf("Server said: Client %s\n", buff);
     memset(buff, 0, 1024);
     int turn1, turn2, turn3;
+    int majorId;
     while (1)
     {
         read(0, buff, 1024);
+        majorId = atoi(&buff[0]);
         send(fd, buff, strlen(buff), 0);
         printf("Wait for Server response!\n");
         recv(fd, buff, 1024, 0);
@@ -109,7 +179,7 @@ int main(int argc, char const *argv[])
             turn1 = atoi(&buff[4]);
             turn2 = atoi(&buff[6]);
             turn3 = atoi(&buff[8]);
-            printf("Server said: on Port %d: Welcome to your question room! \n ", roomPort);
+            printf("Port %d: Welcome to your question room! \n ", roomPort);
             break;
         }
         else
@@ -120,9 +190,15 @@ int main(int argc, char const *argv[])
     }
     if (roomPort > 0)
     {
-        printf("Turns: %d %d %d! \n ", turn1, turn2, turn3);
-        QRoom(turn1, turn2, turn3);
+        printf("Clients in room: %d %d %d! \n ", turn1, turn2, turn3);
+        printf("__________________________ \n ");
+        QRoom(turn1, turn2, turn3, id);
+        sprintf(buff, "@%d\n%s\n____________________________\n", majorId, QT.ask);
+        send(fd, buff, strlen(buff), 0);
     }
-
+    memset(buff, 0, 1024);
+    recv(fd, buff, 1024, 0);
+    printf("Server said: %s\n", buff);
+    printf("Bye Bye!\n");
     return 0;
 }

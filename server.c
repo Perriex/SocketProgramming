@@ -47,6 +47,27 @@ int acceptClient(int server_fd)
     return client_fd;
 }
 
+int saveQuestion(char buffer[], int major)
+{
+    int file_fd;
+    if (major == 1)
+    {
+        file_fd = open("CE.txt", O_APPEND | O_RDWR);
+    }
+    else if (major == 2)
+    {
+        file_fd = open("EE.txt", O_APPEND | O_RDWR);
+    }
+    else if (major == 3)
+    {
+        file_fd = open("CiE.txt", O_APPEND | O_RDWR);
+    }
+    else
+        file_fd = open("ME.txt", O_APPEND | O_RDWR);
+    write(file_fd, buffer, strlen(buffer));
+    close(file_fd);
+}
+
 int numClient[4][3] = {0};
 int numOnline[4] = {0};
 int availablePort = LocalPort + 1;
@@ -96,7 +117,7 @@ int main(int argc, char const *argv[])
     max_sd = server_fd;
     FD_SET(server_fd, &master_set);
 
-    write(1, "Server is running \n\n\n", 23);
+    write(1, "Staring... \n\n\n", 20);
 
     int basePort = LocalPort + 1;
 
@@ -115,7 +136,7 @@ int main(int argc, char const *argv[])
                     if (new_socket > max_sd)
                         max_sd = new_socket;
                     printf("New client connected. id = %d\n", new_socket);
-                    sprintf(buffer, "choose: 1-Computer E. 2-Electrical E. 3-Civil E. 4-Mechanical E. \n");
+                    sprintf(buffer, "%d \n choose: 1-Computer E. 2-Electrical E. 3-Civil E. 4-Mechanical E. \n", new_socket);
                     send(new_socket, buffer, strlen(buffer), 0);
                     memset(buffer, 0, 1024);
                 }
@@ -132,20 +153,31 @@ int main(int argc, char const *argv[])
                         continue;
                     }
                     int major = atoi(&buffer[0]);
-                    if (checkClients(buffer, i, major) == 1)
+                    if (buffer[0] == '@')
                     {
-                        for (int i = 0; i < 3; i++)
+                        int id = atoi(&buffer[1]);
+                        printf("client %d: %s\n", i, buffer);
+                        saveQuestion(buffer, id);
+                        sprintf(buffer, "Your answer submited!\n");
+                        send(i, buffer, strlen(buffer), 0);
+                    }
+                    else
+                    {
+                        if (checkClients(buffer, i, major) == 1)
                         {
-                            send(numClient[major - 1][i], buffer, strlen(buffer), 0);
+                            for (int j = 0; j < 3; j++)
+                            {
+                                send(numClient[major - 1][j], buffer, strlen(buffer), 0);
+                            }
+                            printf("Success!\n");
                         }
-                        printf("Success!\n");
                     }
                     memset(buffer, 0, 1024);
                 }
             }
         }
     }
-
+    printf("END");
     return 0;
 }
 
