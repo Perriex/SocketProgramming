@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <signal.h>
 
-#define LocalPort 8082
+#define LocalPort 8080
 int roomPort = 0;
 
 int connectServer(int port)
@@ -135,7 +135,7 @@ void createAnswer()
     strcat(QT.ask, QT.bestAnswer);
 }
 
-void QRoom(int t1, int t2, int t3, int id)
+int QRoom(int t1, int t2, int t3, int id)
 {
     int sock, broadcast = 1, opt = 1;
 
@@ -149,11 +149,12 @@ void QRoom(int t1, int t2, int t3, int id)
 
     bind(sock, (struct sockaddr *)&bc_address, sizeof(bc_address));
     getTurn(sock, t1, t2, t3, id);
+    return sock;
 }
 
 int main(int argc, char const *argv[])
 {
-    int fd;
+    int fd,sock;
     char buff[1024] = {0};
 
     if (argv[1] > 0)
@@ -198,14 +199,16 @@ int main(int argc, char const *argv[])
     if (roomPort > 0)
     {
         printf("Clients in room: %d %d %d! \n ", turn1, turn2, turn3);
-        QRoom(turn1, turn2, turn3, id);
+        sock = QRoom(turn1, turn2, turn3, id);
         createAnswer();
         sprintf(buff, "@%d\n%s\n____________________________\n", majorId, QT.ask);
         send(fd, buff, strlen(buff), 0);
+        close(sock);
     }
     memset(buff, 0, 1024);
     recv(fd, buff, 1024, 0);
     printf("Server said: %s\n", buff);
     printf("Bye Bye!\n");
+    close(fd);
     return 0;
 }

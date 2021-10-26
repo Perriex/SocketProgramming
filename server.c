@@ -8,7 +8,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 
-#define LocalPort 8082
+#define LocalPort 8080
 
 int setupServer(int port)
 {
@@ -178,6 +178,7 @@ int main(int argc, char const *argv[])
             }
         }
     }
+    close(server_fd);
     printf("...Shut down...");
     return 0;
 }
